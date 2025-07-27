@@ -365,6 +365,7 @@ void _init(void) {
   proxyscan_addscantype(STYPE_HTTP, 6588);
   proxyscan_addscantype(STYPE_HTTP, 8000);
   proxyscan_addscantype(STYPE_HTTP, 3128);
+  proxyscan_addscantype(STYPE_HTTP, 3129);
   proxyscan_addscantype(STYPE_HTTP, 3802);
   proxyscan_addscantype(STYPE_HTTP, 5490);
   proxyscan_addscantype(STYPE_HTTP, 7441);
