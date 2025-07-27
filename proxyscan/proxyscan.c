@@ -948,10 +948,16 @@ void handlescansock(int fd, short events) {
 
       if (sp->type == STYPE_SOCKS5_V4 || sp->type == STYPE_SOCKS5_V6) {
         /* If we got a response, check if it is an open proxy */
-        if (sp->bytesread >= 2 && sp->readbuf[0] == 5 && sp->readbuf[1] == 255) {
-          /* Password protected proxy */
-          killsock(sp, SOUTCOME_PWD_PROT);
-          return;
+        if (sp->bytesread >= 2 && sp->readbuf[0] == 5) {
+          if (sp->readbuf[1] == 255) {
+            /* Password protected proxy */
+            killsock(sp, SOUTCOME_PWD_PROT);
+            return;
+          } else if (sp->readbuf[1] == 0) {
+            /* This is an open proxy. Do not bother waiting on the magic string */
+            killsock(sp, SOUTCOME_OPEN);
+            return;
+          }
         }
       }
       if (memmem(sp->readbuf, sp->bytesread, magicstring, magicstringlength)) {
