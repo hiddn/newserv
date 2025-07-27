@@ -20,12 +20,17 @@
 
 /* string seen if the external program decided it is a proxy */
 #define MAGICEXTSTRING        "DETECTED\n"
-#define MAGICEXTTRINGLENGTH    (sizeof(MAGICEXTSTRING)-1)
+#define MAGICEXTSTRINGLENGTH    (sizeof(MAGICEXTSTRING)-1)
+
+/* string seen if password protected proxy */
+#define MAGICPWDSTRING        "407 Proxy Authentication Required"
+#define MAGICPWDSTRINGLENGTH    (sizeof(MAGICPWDSTRING)-1)
+
 
 #define PSCAN_MAXSCANS      100
 
 #define P_MAX(a,b) (((a)>(b))?(a):(b))
-#define PSCAN_READBUFSIZE   (P_MAX(MAGICSTRINGLENGTH, P_MAX(MAGICROUTERSTRINGLENGTH, MAGICEXTTRINGLENGTH)))*2
+#define PSCAN_READBUFSIZE   (P_MAX(MAGICSTRINGLENGTH, P_MAX(MAGICROUTERSTRINGLENGTH, P_MAX(MAGICEXTSTRINGLENGTH, MAGICPWDSTRINGLENGTH))))*2
 
 #define SSTATE_CONNECTING   0
 #define SSTATE_SENTREQUEST  1
@@ -48,6 +53,7 @@
 #define SOUTCOME_INPROGRESS 0
 #define SOUTCOME_OPEN       1
 #define SOUTCOME_CLOSED     2
+#define SOUTCOME_PWD_PROT   3
 
 #define SCLASS_NORMAL       0
 #define SCLASS_CHECK        1

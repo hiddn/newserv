@@ -76,6 +76,8 @@ sstring *ps_mailname;
 sstring *exthost;
 int extport;
 
+int glinepasswordprotectedproxy;
+
 unsigned long scanspermin;
 unsigned long tempscanspermin=0;
 unsigned long lastscants=0;
@@ -282,6 +284,10 @@ void _init(void) {
   sstring *cfgextport = getcopyconfigitem("proxyscan","extport","0",16);
   extport = strtol(cfgextport->content,NULL,10);
   freesstring(cfgextport);
+
+  sstring *cfgglinepasswordprotectedproxy = getcopyconfigitem("proxyscan","glinepasswordprotectedproxy","1",1);
+  glinepasswordprotectedproxy = strtol(cfgglinepasswordprotectedproxy->content,NULL,10);
+  freesstring(cfgglinepasswordprotectedproxy);
 
   exthost = getcopyconfigitem("proxyscan","exthost","",16);
 
@@ -642,7 +648,7 @@ void killsock(scan *sp, int outcome) {
   if (sp->outcome==SOUTCOME_CLOSED && sp->class==SCLASS_PASS3)
     queuescan(sp->node, sp->type, sp->port, SCLASS_PASS4, time(NULL)+300);
 
-  if (sp->outcome==SOUTCOME_OPEN) {
+  if ((sp->outcome==SOUTCOME_OPEN) || (sp->outcome==SOUTCOME_PWD_PROT)) {
     hitsbyclass[sp->class]++;
   
     /* Lets try and get the cache record.  If there isn't one, make a new one. */
@@ -669,17 +675,20 @@ void killsock(scan *sp, int outcome) {
     if (!chp->glineid || (now>=chp->lastgline+SCANTIMEOUT)) {
       char buf[512];
       struct irc_in_addr *ip;
+      char *passwd_protected_str = (sp->outcome == SOUTCOME_PWD_PROT) ? " (password protected)" : "";
+      int setGline = 0;
 
-      chp->lastgline=now;
-      glinedhosts++;
-
-      loggline(chp, sp->node);   
       ip = &(((patricia_node_t *)sp->node)->prefix->sin);
-      snprintf(reason, sizeof(reason), "Open Proxy, see http://www.quakenet.org/openproxies.html - ID: %d", chp->glineid);
-      glinebyip("*", ip, 128, 43200, reason, GLINE_IGNORE_TRUST, "proxyscan");
-      Error("proxyscan",ERR_DEBUG,"Found open proxy on host %s",IPtostr(*ip));
-
-      snprintf(buf, sizeof(buf), "proxy-gline %lu %s %s %hu %s", time(NULL), IPtostr(*ip), scantostr(sp->type), sp->port, "irc.quakenet.org");
+      if (sp->outcome == SOUTCOME_OPEN || (glinepasswordprotectedproxy && sp->outcome == SOUTCOME_PWD_PROT)) {
+        chp->lastgline=now;
+        glinedhosts++;
+        loggline(chp, sp->node);
+        snprintf(reason, sizeof(reason), "Open Proxy, see http://www.quakenet.org/openproxies.html - ID: %d", chp->glineid);
+        glinebyip("*", ip, 128, 43200, reason, GLINE_IGNORE_TRUST, "proxyscan");
+        setGline = 1;
+      }
+      Error("proxyscan",ERR_DEBUG,"Found open proxy on host %s%s%s",IPtostr(*ip), passwd_protected_str, setGline ? "" : " (not g-lined)");
+      snprintf(buf, sizeof(buf), "proxy-gline %lu %s %s %hu %s%s%s", time(NULL), IPtostr(*ip), scantostr(sp->type), sp->port, "irc.quakenet.org", passwd_protected_str, setGline ? "" : " (not g-lined)");
       triggerhook(HOOK_SHADOW_SERVER, (void *)buf);
     } else {
       loggline(chp, sp->node);  /* Update log only */
@@ -926,7 +935,7 @@ void handlescansock(int fd, short events) {
         magicstringlength = MAGICROUTERSTRINGLENGTH;
       } else if(sp->type == STYPE_EXT) {
         magicstring = MAGICEXTSTRING;
-        magicstringlength = MAGICEXTTRINGLENGTH;
+        magicstringlength = MAGICEXTSTRINGLENGTH;
       } else {
         magicstring = MAGICSTRING;
         magicstringlength = MAGICSTRINGLENGTH;
@@ -937,8 +946,22 @@ void handlescansock(int fd, short events) {
         }
       }
 
+      if (sp->type == STYPE_SOCKS5_V4 || sp->type == STYPE_SOCKS5_V6) {
+        /* If we got a response, check if it is an open proxy */
+        if (sp->bytesread >= 2 && sp->readbuf[0] == 5 && sp->readbuf[1] == 255) {
+          /* Password protected proxy */
+          killsock(sp, SOUTCOME_PWD_PROT);
+          return;
+        }
+      }
       if (memmem(sp->readbuf, sp->bytesread, magicstring, magicstringlength)) {
         killsock(sp, SOUTCOME_OPEN);
+        return;
+      }
+      magicstring = MAGICPWDSTRING;
+      magicstringlength = MAGICPWDSTRINGLENGTH;
+      if (memmem(sp->readbuf, sp->bytesread, magicstring, magicstringlength)) {
+        killsock(sp, SOUTCOME_PWD_PROT);
         return;
       }
     }

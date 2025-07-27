@@ -55,12 +55,16 @@ nick=P
 user=proxyscan
 host=proxyscan.example.com
 realname=Proxyscan 2
-ip=5.6.7.8
+channel=#quakenet
+reportchannel=#quakenet
+ipv4=127.0.0.1
+ipv6=::1
 mailerip=9.10.11.12
 mailname=badger.example.com
 port=6667
 maxscans=200
 rescaninterval=86400
+glinepasswordprotectedproxy=1
 
 [chanserv]
 nick=Q8
